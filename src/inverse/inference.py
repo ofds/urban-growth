@@ -1,6 +1,13 @@
 """
 Urban Growth Machine Learning Inference Engine - OPTIMIZED
 
+COORDINATE REFERENCE SYSTEM REQUIREMENTS:
+ALL sequences processed by this engine MUST be in METRIC CRS (meters).
+Geographic CRS (lat/lon degrees) will cause incorrect distance calculations
+and geometric operations. The rewind.py engine converts sequences to metric
+CRS automatically. If you encounter geographic CRS errors, check that
+rewind.py is functioning correctly.
+
 Performance improvements:
 - Parallel model training with joblib
 - Vectorized spatial computations
@@ -317,20 +324,27 @@ class InferenceEngine:
     def _extract_spatial_features(self, blocks: gpd.GeoDataFrame) -> np.ndarray:
         """
         Extract spatial features with VECTORIZED distance computation [web:26][web:29].
+
+        NOTE: Assumes blocks are in METRIC CRS for accurate distance calculations.
+        rewind.py should convert to metric CRS before sequences reach inference.py.
         """
         if len(blocks) == 0:
             return np.zeros(14, dtype=np.float32)
-        
+
+        # Safety check: ensure we're in metric CRS
+        if blocks.crs.is_geographic:
+            raise ValueError("Blocks must be in metric CRS for spatial feature extraction")
+
         # Vectorized centroid extraction [web:26]
         centroids = blocks.geometry.centroid
         centroid_coords = np.array([[p.x, p.y] for p in centroids], dtype=np.float32)
-        
-        # City centroid (direct computation - caching removed for safety)
+
+        # City centroid (direct computation - safe in metric CRS)
         city_union = blocks.geometry.union_all()
         city_centroid = city_union.centroid
         city_coords = np.array([city_centroid.x, city_centroid.y], dtype=np.float32)
-        
-        # VECTORIZED distance computation [web:26][web:29]
+
+        # VECTORIZED distance computation [web:26][web:29] (accurate in metric CRS)
         diff = centroid_coords - city_coords
         distances = np.sqrt(np.einsum('ij,ij->i', diff, diff))
         

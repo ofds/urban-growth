@@ -77,7 +77,7 @@ class NeighborCache:
     def remove_block(self, block_idx: int):
         """Mark block as removed (incremental update)."""
         self._removed_blocks.add(block_idx)
-        
+
         if block_idx in self._neighbor_cache:
             neighbors = self._neighbor_cache[block_idx]
             # Invalidate neighbor caches
@@ -85,6 +85,20 @@ class NeighborCache:
                 if neighbor_idx in self._neighbor_cache:
                     del self._neighbor_cache[neighbor_idx]
             del self._neighbor_cache[block_idx]
+
+    def rebuild_index(self):
+        """Rebuild spatial index with only active blocks (expensive but accurate)."""
+        if len(self.blocks) > 0:
+            active_blocks = self.blocks[~self.blocks.index.isin(self._removed_blocks)]
+            if len(active_blocks) > 0:
+                self.spatial_index = active_blocks.sindex
+            else:
+                self.spatial_index = None
+        else:
+            self.spatial_index = None
+
+        # Clear all neighbor caches since index changed
+        self._neighbor_cache.clear()
     
     def get_all_neighbor_counts(self) -> Dict[int, int]:
         """Get neighbor counts for all active blocks."""
@@ -227,10 +241,11 @@ class RewindEngine:
         
         # ========== GENERATE SEQUENCE (KEEP IN METRIC CRS!) ========== #
         logger.info("Building sequence in METRIC CRS (for ML training)...")
-        
-        # Reverse snapshots for forward chronology
+
+        # Sort snapshots by step, then reverse for forward chronology [initial → final]
         snapshot_data.sort(key=lambda x: x[0])
-        
+        snapshot_data.reverse()  # Now: fewest blocks → most blocks (forward growth)
+
         # *** KEY FIX: DON'T convert back to geographic! ***
         # Keep everything in METRIC CRS for ML training
         forward_sequence = list(self._generate_states_lazily(

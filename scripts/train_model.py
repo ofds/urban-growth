@@ -45,55 +45,25 @@ def main():
     # ======================== FIX ISSUES ========================
     print(f"\n🔧 Preparing sequence for training...")
     
-    # 1. Check if sequence is in reverse (rewind) order
+    # 1. Verify sequence is in forward (growth) order
     initial_blocks = len(sequence.initial_state.blocks)
     final_blocks = len(sequence.final_state.blocks)
-    
+
     if final_blocks < initial_blocks:
-        print(f"   ⚠️  Sequence is in REVERSE order (rewind: {initial_blocks} → {final_blocks})")
-        print(f"   🔄 Reversing to FORWARD order (growth: {final_blocks} → {initial_blocks})...")
-        sequence.states = list(reversed(sequence.states))
-        print(f"   ✅ Reversed! Now: {len(sequence.initial_state.blocks)} → {len(sequence.final_state.blocks)} blocks")
+        print(f"   ❌ ERROR: Sequence is in REVERSE order (rewind: {initial_blocks} → {final_blocks})")
+        print(f"      rewind.py should output forward-ordered sequences!")
+        sys.exit(1)
     else:
-        print(f"   ✅ Sequence already in forward (growth) order")
+        print(f"   ✅ Sequence in forward (growth) order: {initial_blocks} → {final_blocks} blocks")
     
-    # 2. Convert from geographic (lat/lon) to metric (meters) CRS - MEMORY SAFE VERSION
+    # 2. Validate CRS - rewind.py should output metric CRS
     if sequence.states[0].blocks.crs.is_geographic:
-        print(f"   ⚠️  Sequence is in geographic CRS (lat/lon degrees)")
-        print(f"   📐 Converting to metric CRS (meters) - MEMORY SAFE...")
-        print(f"   ⏳ This may take 5-10 minutes for large sequences...")
-        
-        # FIXED: Memory-safe conversion with garbage collection
-        import gc
-        
-        converted_states = []
-        total_states = len(sequence.states)
-        
-        for i in range(total_states):
-            # Convert single state
-            converted_state = sequence.states[i].to_metric_crs()
-            converted_states.append(converted_state)
-            
-            # Progress update every 100 states
-            if (i + 1) % 100 == 0 or (i + 1) == total_states:
-                progress_pct = ((i + 1) / total_states) * 100
-                print(f"      Progress: {i+1}/{total_states} ({progress_pct:.1f}%)...", end='\r')
-                
-                # Force garbage collection to free memory
-                gc.collect()
-        
-        # Replace entire list at once (frees old references)
-        old_states = sequence.states
-        sequence.states = converted_states
-        
-        # Explicitly delete old references
-        del old_states
-        del converted_states
-        gc.collect()
-        
-        print(f"   ✅ Converted to {sequence.states[0].blocks.crs}                              ")
+        print(f"   ❌ ERROR: Sequence is in geographic CRS (lat/lon degrees)")
+        print(f"      rewind.py should output metric CRS sequences!")
+        print(f"      Current CRS: {sequence.states[0].blocks.crs}")
+        sys.exit(1)
     else:
-        print(f"   ✅ Already in metric CRS: {sequence.states[0].blocks.crs}")
+        print(f"   ✅ Sequence in metric CRS: {sequence.states[0].blocks.crs}")
     
     # 3. Verify growth is detectable
     blocks_delta = len(sequence.final_state.blocks) - len(sequence.initial_state.blocks)
